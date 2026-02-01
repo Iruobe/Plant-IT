@@ -4,7 +4,7 @@ An AI-powered iOS app that scans your plants to assess their health and recommen
 A smart, AI centred mobile application designed to help everyday gardeners and plant enthusiasts nurture healthier plants and make informed planting decisions
 
 About
-Plant IT puts the power of AI in your pocket. Simply scan your plants to receive instant health assessments and personalized care recommendations. Planning to start a new garden? Share your available space and goals, and let Plant IT suggest the perfect plants for you—whether you're growing for profit, aesthetics, or simply the joy of greenery
+Plant IT puts the power of AI in your pocket. Simply scan your plants to receive instant health assessments and personalized care recommendations. Planning to start a new garden? Share your available space and goals, and let Plant IT suggest the perfect plants for you whether you're growing for profit, aesthetics, or simply the joy of greenery
 
 Features
 AI Plant Health Scanner; Use your camera to diagnose plant health and get actionable improvement tips
