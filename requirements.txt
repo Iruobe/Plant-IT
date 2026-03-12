@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+boto3
+httpx
+mangum
+motor
+pytest
