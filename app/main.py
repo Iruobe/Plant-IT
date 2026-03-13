@@ -3,10 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.router import api_router
 
+from contextlib import asynccontextmanager
+from app.repositories.dynamodb import create_tables
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: create tables
+    create_tables()
+    yield
+    # Shutdown: nothing to clean up
+
 app = FastAPI(
     title="Plant IT API",
     description="AI-powered plant health analysis",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
