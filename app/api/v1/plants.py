@@ -4,6 +4,8 @@ from typing import Optional, List
 from uuid import uuid4
 from datetime import datetime
 
+from app.repositories.s3 import generate_upload_url, generate_download_url
+
 #DB
 from app.repositories.dynamodb import get_plants_table
 
@@ -78,3 +80,39 @@ async def delete_plant(plant_id: str):
     
     table.delete_item(Key={"plant_id": plant_id})
     return {"message": "Plant deleted"}
+
+
+
+
+@router.post("/{plant_id}/upload-url")
+async def get_upload_url(plant_id: str, filename: str = "photo.jpg"):
+    """Get a presigned URL to upload an image directly to S3"""
+    table = get_plants_table()
+    response = table.get_item(Key={"plant_id": plant_id})
+    
+    if 'Item' not in response:
+        raise HTTPException(status_code=404, detail="Plant not found")
+    
+    return generate_upload_url(plant_id, filename)
+
+@router.post("/{plant_id}/confirm-upload")
+async def confirm_upload(plant_id: str, key: str):
+    """Confirm upload and save image URL to plant record"""
+    table = get_plants_table()
+    response = table.get_item(Key={"plant_id": plant_id})
+    
+    if 'Item' not in response:
+        raise HTTPException(status_code=404, detail="Plant not found")
+    
+    image_url = generate_download_url(key)
+    
+    table.update_item(
+        Key={"plant_id": plant_id},
+        UpdateExpression="SET image_url = :url, updated_at = :now",
+        ExpressionAttributeValues={
+            ":url": key,
+            ":now": datetime.utcnow().isoformat()
+        }
+    )
+    
+    return {"message": "Image uploaded", "image_url": image_url}
