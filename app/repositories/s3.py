@@ -1,13 +1,20 @@
 import boto3
 from app.core.config import settings
 
-def get_s3_client():
-    return boto3.client('s3', region_name=settings.AWS_REGION)
+_s3_client = None
 
-def generate_upload_url(plant_id: str, filename: str) -> dict:
-    """Generate a presigned URL for direct upload from the app"""
+
+def get_s3_client():
+    """Get cached S3 client."""
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = boto3.client('s3', region_name=settings.AWS_REGION)
+    return _s3_client
+
+
+def generate_upload_url(key: str) -> str:
+    """Generate a presigned URL for direct upload from the app."""
     s3 = get_s3_client()
-    key = f"plants/{plant_id}/{filename}"
     
     url = s3.generate_presigned_url(
         'put_object',
@@ -19,13 +26,11 @@ def generate_upload_url(plant_id: str, filename: str) -> dict:
         ExpiresIn=300  # 5 minutes
     )
     
-    return {
-        "upload_url": url,
-        "key": key
-    }
+    return url
+
 
 def generate_download_url(key: str) -> str:
-    """Generate a presigned URL to view an image"""
+    """Generate a presigned URL to view an image."""
     s3 = get_s3_client()
     
     url = s3.generate_presigned_url(
