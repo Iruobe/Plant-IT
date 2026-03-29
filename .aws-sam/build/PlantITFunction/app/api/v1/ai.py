@@ -3,15 +3,16 @@ from pydantic import BaseModel
 from typing import Optional, List
 from uuid import uuid4
 from datetime import datetime
+import json
 
 from app.repositories.dynamodb import get_plants_table
 from app.repositories.s3 import generate_download_url
-from app.services.bedrock import analyze_plant_image
+from app.services.bedrock import analyze_plant_image, get_bedrock_client
 from app.services.recommendations import get_plant_recommendations
 from app.services.chat import chat_with_assistant, clear_chat_session
 from app.core.auth import get_current_user
+from app.core.config import settings
 from app.repositories import care_plans as care_plans_repo
-import uuid
 
 router = APIRouter()
 
@@ -62,11 +63,14 @@ async def scan_plant(
     current_user: dict = Depends(get_current_user)
 ):
     """Scan a plant image and analyze its health using AI."""
+    user_id = current_user["uid"]
+    plant_id = request.plant_id
+    
     table = get_plants_table()
     response = table.get_item(
         Key={
-            "user_id": current_user["uid"],
-            "plant_id": request.plant_id
+            "user_id": user_id,
+            "plant_id": plant_id
         }
     )
     
@@ -85,8 +89,8 @@ async def scan_plant(
     
     table.update_item(
         Key={
-            "user_id": current_user["uid"],
-            "plant_id": request.plant_id
+            "user_id": user_id,
+            "plant_id": plant_id
         },
         UpdateExpression="SET health_score = :score, health_status = :status, updated_at = :now",
         ExpressionAttributeValues={
@@ -98,7 +102,7 @@ async def scan_plant(
 
     # Auto-generate care plan after scan
     try:
-        # Delete existing care plans
+        # Delete existing care plans for this plant
         care_plans_repo.delete_care_plans_for_plant(user_id, plant_id)
         
         # Generate new care plan based on scan results
@@ -115,6 +119,7 @@ Generate tasks as JSON array:
 
 Only return the JSON array, nothing else."""
 
+        bedrock = get_bedrock_client()
         care_response = bedrock.invoke_model(
             modelId=settings.BEDROCK_MODEL_ID,
             contentType="application/json",
@@ -134,13 +139,15 @@ Only return the JSON array, nothing else."""
             care_text = care_text.split("```")[1]
             if care_text.startswith("json"):
                 care_text = care_text[4:]
+        if care_text.endswith("```"):
+            care_text = care_text[:-3]
         
         tasks_data = json.loads(care_text.strip())
         
         for task_data in tasks_data:
             care_plans_repo.create_care_plan_task(
                 user_id=user_id,
-                task_id=f"task_{uuid.uuid4().hex[:8]}",
+                task_id=f"task_{uuid4().hex[:8]}",
                 plant_id=plant_id,
                 plant_name=plant.get('name', 'Unknown'),
                 task_type=task_data.get('task_type', 'other'),
@@ -150,13 +157,16 @@ Only return the JSON array, nothing else."""
                 times_per_week=task_data.get('times_per_week', 7),
                 priority=task_data.get('priority', 'medium')
             )
+        
+        print(f"Successfully generated {len(tasks_data)} care tasks for plant {plant_id}")
+        
     except Exception as e:
         # Don't fail the scan if care plan generation fails
         print(f"Care plan generation failed: {e}")
-    
+
     return ScanResult(
         scan_id=scan_id,
-        plant_id=request.plant_id,
+        plant_id=plant_id,
         plant_type=analysis.get('plant_type'),
         health_score=analysis['health_score'],
         health_status=analysis['health_status'],

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     TASK_COMPLETIONS_TABLE_NAME: str = "plant-it-task-completions-prod"
     
     # Bedrock
-    BEDROCK_MODEL_ID: str = "anthropic.claude-sonnet-4-20250514"
+    BEDROCK_MODEL_ID: str = "anthropic.claude-sonnet-4-6"
     
     MONGODB_URI: str = "mongodb://localhost:27017"
     MONGODB_DATABASE: str = "plant_it"
