@@ -12,6 +12,7 @@ from app.services.recommendations import get_plant_recommendations
 from app.services.chat import chat_with_assistant, clear_chat_session
 from app.core.auth import get_current_user
 from app.core.config import settings
+from app.core.rate_limit import rate_limit
 from app.repositories import care_plans as care_plans_repo
 
 router = APIRouter()
@@ -36,11 +37,11 @@ class ScanResult(BaseModel):
 
 # Recommendation Models
 class RecommendationRequest(BaseModel):
-    goals: List[str] = []  # food, decorative, medicinal, commercial, low_maintenance
+    goals: List[str] = []
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    space_type: Optional[str] = None  # indoor, outdoor, balcony, garden
-    sunlight: Optional[str] = None  # full_sun, partial_shade, shade
+    space_type: Optional[str] = None
+    sunlight: Optional[str] = None
     experience_level: str = "beginner"
 
 
@@ -56,11 +57,12 @@ class ChatResponse(BaseModel):
     session_id: str
 
 
-# Scan Endpoint
+# Scan Endpoint - Rate Limited (10/hour)
 @router.post("/scan", response_model=ScanResult)
 async def scan_plant(
     request: ScanRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    _rate_limit: dict = Depends(rate_limit("ai_scan"))
 ):
     """Scan a plant image and analyze its health using AI."""
     user_id = current_user["uid"]
@@ -177,11 +179,12 @@ Only return the JSON array, nothing else."""
     )
 
 
-# Recommendation Endpoint
+# Recommendation Endpoint - Rate Limited (10/hour)
 @router.post("/recommendations")
 async def get_recommendations(
     request: RecommendationRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    _rate_limit: dict = Depends(rate_limit("ai_recommendations"))
 ):
     """Get personalized plant recommendations based on goals, location, and conditions."""
     recommendations = get_plant_recommendations(
@@ -196,11 +199,12 @@ async def get_recommendations(
     return recommendations
 
 
-# Chat Endpoints
+# Chat Endpoint - Rate Limited (30/hour)
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    _rate_limit: dict = Depends(rate_limit("ai_chat"))
 ):
     """Chat with the Plant IT assistant about plants and gardening."""
     # Get plant context if plant_id provided

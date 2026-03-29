@@ -14,6 +14,7 @@ Globals:
         DYNAMODB_TABLE_NAME: plant-it-plants-prod
         CARE_PLANS_TABLE_NAME: plant-it-care-plans-prod
         TASK_COMPLETIONS_TABLE_NAME: plant-it-task-completions-prod
+        RATE_LIMITS_TABLE_NAME: plant-it-rate-limits-prod
         S3_BUCKET_NAME: plant-it-images-dev
 
 Resources:
@@ -42,6 +43,8 @@ Resources:
             TableName: !Ref CarePlansTable
         - DynamoDBCrudPolicy:
             TableName: !Ref TaskCompletionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RateLimitsTable
         - S3CrudPolicy:
             BucketName: plant-it-images-dev
         - Statement:
@@ -97,6 +100,25 @@ Resources:
           KeyType: HASH
         - AttributeName: completion_id
           KeyType: RANGE
+
+  RateLimitsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: plant-it-rate-limits-prod
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: endpoint_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: endpoint_key
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
 
 Outputs:
   ApiUrl:

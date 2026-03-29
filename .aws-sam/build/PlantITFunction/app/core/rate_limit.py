@@ -41,7 +41,7 @@ def get_rate_limits_table():
 # Format: endpoint_key -> (max_requests, window_seconds, friendly_name)
 RATE_LIMITS = {
     # AI endpoints - expensive, strict limits
-    "ai_scan": (10, 3600, "plant scans"),
+    "ai_scan": (2, 3600, "plant scans"),
     "ai_chat": (30, 3600, "chat messages"),
     "ai_recommendations": (10, 3600, "recommendations"),
     "care_plans_generate": (10, 3600, "care plan generations"),

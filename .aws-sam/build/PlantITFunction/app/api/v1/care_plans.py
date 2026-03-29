@@ -9,6 +9,8 @@ from app.core.auth import get_current_user
 from app.repositories import care_plans as care_plans_repo
 from app.repositories.dynamodb import get_plants_table
 from app.services.bedrock import get_bedrock_client
+from app.core.rate_limit import rate_limit
+
 
 router = APIRouter()
 
@@ -35,7 +37,8 @@ class CarePlanTask(BaseModel):
 @router.post("/generate/{plant_id}")
 async def generate_care_plan(
     plant_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    _rate_limit: dict = Depends(rate_limit("care_plans_generate"))
 ):
     """Generate AI care plan for a plant based on its health analysis."""
     user_id = current_user["uid"]
