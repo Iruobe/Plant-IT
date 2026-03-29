@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from uuid import uuid4
 from datetime import datetime
@@ -13,6 +13,11 @@ from app.services.chat import chat_with_assistant, clear_chat_session
 from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.rate_limit import rate_limit
+from app.core.validators import (
+    validate_uuid,
+    validate_chat_message,
+    validate_session_id,
+)
 from app.repositories import care_plans as care_plans_repo
 
 router = APIRouter()
@@ -21,6 +26,11 @@ router = APIRouter()
 # Scan Models
 class ScanRequest(BaseModel):
     plant_id: str
+    
+    @field_validator('plant_id')
+    @classmethod
+    def validate_plant_id(cls, v):
+        return validate_uuid(v, "Plant ID")
 
 
 class ScanResult(BaseModel):
@@ -43,6 +53,21 @@ class RecommendationRequest(BaseModel):
     space_type: Optional[str] = None
     sunlight: Optional[str] = None
     experience_level: str = "beginner"
+    
+    @field_validator('goals')
+    @classmethod
+    def validate_goals(cls, v):
+        if len(v) > 10:
+            raise ValueError("Maximum 10 goals allowed")
+        return [g.strip()[:50] for g in v if g.strip()]  # Limit each goal to 50 chars
+    
+    @field_validator('experience_level')
+    @classmethod
+    def validate_experience(cls, v):
+        valid_levels = {'beginner', 'intermediate', 'expert'}
+        if v.lower() not in valid_levels:
+            return 'beginner'
+        return v.lower()
 
 
 # Chat Models
@@ -50,6 +75,23 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = "default"
     plant_id: Optional[str] = None
+    
+    @field_validator('message')
+    @classmethod
+    def validate_message(cls, v):
+        return validate_chat_message(v)
+    
+    @field_validator('session_id')
+    @classmethod
+    def validate_session(cls, v):
+        return validate_session_id(v)
+    
+    @field_validator('plant_id')
+    @classmethod
+    def validate_plant(cls, v):
+        if v is None:
+            return v
+        return validate_uuid(v, "Plant ID")
 
 
 class ChatResponse(BaseModel):
@@ -247,5 +289,7 @@ async def clear_chat(
     current_user: dict = Depends(get_current_user)
 ):
     """Clear chat history for a session."""
+    # Validate session_id
+    session_id = validate_session_id(session_id)
     user_session_id = f"{current_user['uid']}_{session_id}"
     return clear_chat_session(user_session_id)

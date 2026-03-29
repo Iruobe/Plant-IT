@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from uuid import uuid4
 from datetime import datetime
@@ -8,6 +8,13 @@ from app.repositories.s3 import generate_upload_url, generate_download_url
 from app.repositories.dynamodb import get_plants_table
 from app.repositories import care_plans as care_plans_repo
 from app.core.auth import get_current_user
+from app.core.validators import (
+    validate_plant_name,
+    validate_species,
+    validate_location,
+    validate_goal,
+    validate_uuid,
+)
 
 router = APIRouter()
 
@@ -17,6 +24,26 @@ class PlantCreate(BaseModel):
     species: Optional[str] = None
     goal: str = "decorative"
     location: Optional[str] = None
+    
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v):
+        return validate_plant_name(v)
+    
+    @field_validator('species')
+    @classmethod
+    def validate_species_field(cls, v):
+        return validate_species(v)
+    
+    @field_validator('location')
+    @classmethod
+    def validate_location_field(cls, v):
+        return validate_location(v)
+    
+    @field_validator('goal')
+    @classmethod
+    def validate_goal_field(cls, v):
+        return validate_goal(v)
 
 
 class Plant(BaseModel):
@@ -139,6 +166,19 @@ async def get_upload_url(
     current_user: dict = Depends(get_current_user)
 ):
     """Get a presigned URL to upload an image directly to S3."""
+    # Validate filename
+    if not filename or len(filename) > 100:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    # Only allow safe file extensions
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+    ext = '.' + filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    if ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+        )
+    
     table = get_plants_table()
     response = table.get_item(
         Key={
@@ -164,6 +204,10 @@ async def confirm_upload(
     current_user: dict = Depends(get_current_user)
 ):
     """Confirm upload and save image URL to plant record."""
+    # Validate key format (should match expected pattern)
+    if not key.startswith(f"plants/{current_user['uid']}/{plant_id}/"):
+        raise HTTPException(status_code=400, detail="Invalid upload key")
+    
     table = get_plants_table()
     response = table.get_item(
         Key={
