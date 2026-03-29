@@ -11,9 +11,12 @@ class Settings(BaseSettings):
     DYNAMODB_ENDPOINT_URL: str | None = None
     S3_BUCKET_NAME: str = "plant-it-images"
     
-    # New tables for care plans
+    # Care plans tables
     CARE_PLANS_TABLE_NAME: str = "plant-it-care-plans-prod"
     TASK_COMPLETIONS_TABLE_NAME: str = "plant-it-task-completions-prod"
+    
+    # Rate limiting table
+    RATE_LIMITS_TABLE_NAME: str = "plant-it-rate-limits-prod"
     
     # Bedrock
     BEDROCK_MODEL_ID: str = "anthropic.claude-sonnet-4-6"
