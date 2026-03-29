@@ -1,0 +1,104 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Plant IT Backend API
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.12
+    Environment:
+      Variables:
+        ENVIRONMENT: production
+        AWS_REGION_NAME: eu-west-2
+        DYNAMODB_TABLE_NAME: plant-it-plants-prod
+        CARE_PLANS_TABLE_NAME: plant-it-care-plans-prod
+        TASK_COMPLETIONS_TABLE_NAME: plant-it-task-completions-prod
+        S3_BUCKET_NAME: plant-it-images-dev
+
+Resources:
+  PlantITFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: app.lambda_handler.handler
+      Architectures:
+        - x86_64
+      Events:
+        ApiGateway:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        Root:
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: ANY
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PlantsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CarePlansTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TaskCompletionsTable
+        - S3CrudPolicy:
+            BucketName: plant-it-images-dev
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+
+  PlantsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: plant-it-plants-prod
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: plant_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: plant_id
+          KeyType: RANGE
+
+  CarePlansTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: plant-it-care-plans-prod
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: task_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: task_id
+          KeyType: RANGE
+
+  TaskCompletionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: plant-it-task-completions-prod
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: completion_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: completion_id
+          KeyType: RANGE
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"

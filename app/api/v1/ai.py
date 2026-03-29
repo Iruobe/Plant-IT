@@ -10,6 +10,8 @@ from app.services.bedrock import analyze_plant_image
 from app.services.recommendations import get_plant_recommendations
 from app.services.chat import chat_with_assistant, clear_chat_session
 from app.core.auth import get_current_user
+from app.repositories import care_plans as care_plans_repo
+import uuid
 
 router = APIRouter()
 
@@ -93,6 +95,65 @@ async def scan_plant(
             ":now": scanned_at
         }
     )
+
+    # Auto-generate care plan after scan
+    try:
+        # Delete existing care plans
+        care_plans_repo.delete_care_plans_for_plant(user_id, plant_id)
+        
+        # Generate new care plan based on scan results
+        care_prompt = f"""Based on this plant scan, generate 3-5 specific care tasks.
+
+Plant: {plant.get('name', 'Unknown')}
+Species: {analysis.get('plant_type', 'Unknown')}
+Health Score: {analysis.get('health_score', 50)}%
+Issues Found: {', '.join(analysis.get('issues', []))}
+AI Recommendations: {', '.join(analysis.get('recommendations', []))}
+
+Generate tasks as JSON array:
+[{{"task_type": "water|fertilize|sunlight|rotate|prune|mist|inspect", "title": "...", "description": "specific instructions with quantities", "frequency": "daily|weekly|2x_weekly|3x_weekly", "times_per_week": number, "priority": "high|medium|low"}}]
+
+Only return the JSON array, nothing else."""
+
+        care_response = bedrock.invoke_model(
+            modelId=settings.BEDROCK_MODEL_ID,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": care_prompt}]
+            })
+        )
+        
+        care_result = json.loads(care_response['body'].read())
+        care_text = care_result['content'][0]['text'].strip()
+        
+        # Clean JSON response
+        if care_text.startswith("```"):
+            care_text = care_text.split("```")[1]
+            if care_text.startswith("json"):
+                care_text = care_text[4:]
+        
+        tasks_data = json.loads(care_text.strip())
+        
+        for task_data in tasks_data:
+            care_plans_repo.create_care_plan_task(
+                user_id=user_id,
+                task_id=f"task_{uuid.uuid4().hex[:8]}",
+                plant_id=plant_id,
+                plant_name=plant.get('name', 'Unknown'),
+                task_type=task_data.get('task_type', 'other'),
+                title=task_data.get('title', ''),
+                description=task_data.get('description', ''),
+                frequency=task_data.get('frequency', 'daily'),
+                times_per_week=task_data.get('times_per_week', 7),
+                priority=task_data.get('priority', 'medium')
+            )
+    except Exception as e:
+        # Don't fail the scan if care plan generation fails
+        print(f"Care plan generation failed: {e}")
+
     
     return ScanResult(
         scan_id=scan_id,
