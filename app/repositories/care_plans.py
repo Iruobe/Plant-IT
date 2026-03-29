@@ -214,8 +214,8 @@ def get_completions_for_today(user_id: str) -> list[dict]:
     return response.get('Items', [])
 
 
-def get_pending_tasks_for_today(user_id: str) -> list[dict]:
-    """Get tasks that need to be done today."""
+def get_tasks_for_today(user_id: str) -> list[dict]:
+    """Get all tasks for today, including completed ones."""
     # Get all care plans
     all_tasks = get_care_plans_for_user(user_id)
     
@@ -231,7 +231,7 @@ def get_pending_tasks_for_today(user_id: str) -> list[dict]:
         tid = c['task_id']
         week_completion_counts[tid] = week_completion_counts.get(tid, 0) + 1
     
-    pending_tasks = []
+    today_tasks = []
     
     for task in all_tasks:
         task_id = task['task_id']
@@ -240,20 +240,22 @@ def get_pending_tasks_for_today(user_id: str) -> list[dict]:
         
         # Check if task should show today
         if frequency == 'daily':
-            # Daily tasks: show if not completed today
-            if task_id not in today_completed_ids:
-                task['completed'] = False
-                task['completions_this_week'] = week_completion_counts.get(task_id, 0)
-                pending_tasks.append(task)
+            # Daily tasks: always show, mark as completed if done today
+            task['completed'] = task_id in today_completed_ids
+            task['completions_this_week'] = week_completion_counts.get(task_id, 0)
+            today_tasks.append(task)
         else:
-            # Weekly tasks: show if not hit target for the week
+            # Weekly tasks: show if not hit target for the week OR completed today
             completions = week_completion_counts.get(task_id, 0)
-            if completions < times_per_week:
-                # Check if already done today
-                task['completed'] = task_id in today_completed_ids
+            is_completed_today = task_id in today_completed_ids
+            
+            if completions < times_per_week or is_completed_today:
+                task['completed'] = is_completed_today
                 task['completions_this_week'] = completions
-                task['remaining_this_week'] = times_per_week - completions
-                if not task['completed']:
-                    pending_tasks.append(task)
+                task['remaining_this_week'] = max(0, times_per_week - completions)
+                today_tasks.append(task)
     
-    return pending_tasks
+    # Sort by plant_name, then by completed status (incomplete first)
+    today_tasks.sort(key=lambda t: (t.get('plant_name', ''), t.get('completed', False)))
+    
+    return today_tasks

@@ -82,7 +82,7 @@ Respond ONLY with a JSON array of tasks, no other text:
     try:
         bedrock = get_bedrock_client()
         response = bedrock.invoke_model(
-            modelId="anthropic.claude-sonnet-4-20250514",
+            modelId="anthropic.claude-sonnet-4-6",
             contentType="application/json",
             accept="application/json",
             body=json.dumps({
@@ -138,13 +138,13 @@ Respond ONLY with a JSON array of tasks, no other text:
         raise HTTPException(status_code=500, detail=f"Failed to generate care plan: {str(e)}")
 
 
-@router.get("/today", response_model=list[CarePlanTask])
+@router.get("/today")
 async def get_today_tasks(
     current_user: dict = Depends(get_current_user)
 ):
-    """Get all pending tasks for today."""
+    """Get all tasks for today, including completed ones."""
     user_id = current_user["uid"]
-    tasks = care_plans_repo.get_pending_tasks_for_today(user_id)
+    tasks = care_plans_repo.get_tasks_for_today(user_id)
     return tasks
 
 
@@ -201,7 +201,7 @@ async def get_completion_history(
     year: Optional[int] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get task completion history for a week."""
+    '''Get task completion history for a week.'''
     user_id = current_user["uid"]
     
     completions = care_plans_repo.get_completions_for_week(user_id, week, year)

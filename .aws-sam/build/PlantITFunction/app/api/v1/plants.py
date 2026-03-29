@@ -6,6 +6,7 @@ from datetime import datetime
 
 from app.repositories.s3 import generate_upload_url, generate_download_url
 from app.repositories.dynamodb import get_plants_table
+from app.repositories import care_plans as care_plans_repo
 from app.core.auth import get_current_user
 
 router = APIRouter()
@@ -102,13 +103,14 @@ async def delete_plant(
     plant_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Delete a plant."""
+    """Delete a plant and its associated care plans."""
+    user_id = current_user["uid"]
     table = get_plants_table()
     
     # Check if exists and belongs to user
     response = table.get_item(
         Key={
-            "user_id": current_user["uid"],
+            "user_id": user_id,
             "plant_id": plant_id
         }
     )
@@ -116,9 +118,13 @@ async def delete_plant(
     if 'Item' not in response:
         raise HTTPException(status_code=404, detail="Plant not found")
     
+    # Delete associated care plans
+    care_plans_repo.delete_care_plans_for_plant(user_id, plant_id)
+    
+    # Delete the plant
     table.delete_item(
         Key={
-            "user_id": current_user["uid"],
+            "user_id": user_id,
             "plant_id": plant_id
         }
     )
