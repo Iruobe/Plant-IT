@@ -14,6 +14,12 @@ import os
 
 # Initialize Firebase Admin
 def init_firebase():
+    # Skip initialization in test environment
+    # This allows tests to mock get_current_user without needing Firebase credentials. 
+    # Had issues testing the firbase sdk
+    if os.environ.get("ENVIRONMENT") == "test":
+        return
+        
     if firebase_admin._apps:
         return
     
