@@ -1,0 +1,153 @@
+# CI Pipeline - Runs on every push to any branch
+# 
+# This workflow:
+# 1. Sets up Python environment
+# 2. Installs dependencies
+# 3. Runs all unit and integration tests
+# 4. Generates coverage report
+# 5. Fails if coverage drops below 70%
+
+name: CI
+
+on:
+  push:
+    branches: ['*']  # Run on all branches
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: '3.11'
+  
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      # ============================================================
+      # SETUP
+      # ============================================================
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      # ============================================================
+      # UNIT TESTS
+      # ============================================================
+      
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ \
+            -v \
+            --tb=short \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-unit.xml \
+            -m "not slow"
+        env:
+          ENVIRONMENT: test
+          AWS_REGION: eu-west-2
+          DYNAMODB_TABLE_NAME: plant-it-plants-test
+          CARE_PLANS_TABLE_NAME: plant-it-care-plans-test
+          TASK_COMPLETIONS_TABLE_NAME: plant-it-task-completions-test
+          RATE_LIMITS_TABLE_NAME: plant-it-rate-limits-test
+          S3_BUCKET_NAME: plant-it-images-test
+      
+      # ============================================================
+      # INTEGRATION TESTS
+      # ============================================================
+      
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ \
+            -v \
+            --tb=short \
+            --cov=app \
+            --cov-append \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:coverage_html
+        env:
+          ENVIRONMENT: test
+          AWS_REGION: eu-west-2
+          DYNAMODB_TABLE_NAME: plant-it-plants-test
+          CARE_PLANS_TABLE_NAME: plant-it-care-plans-test
+          TASK_COMPLETIONS_TABLE_NAME: plant-it-task-completions-test
+          RATE_LIMITS_TABLE_NAME: plant-it-rate-limits-test
+          S3_BUCKET_NAME: plant-it-images-test
+      
+      # ============================================================
+      # COVERAGE REPORT
+      # ============================================================
+      
+      - name: Check coverage threshold
+        run: |
+          coverage report --fail-under=70
+      
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage_html/
+          retention-days: 7
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+        continue-on-error: true
+      
+      # ============================================================
+      # TEST SUMMARY
+      # ============================================================
+      
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage.xml ]; then
+            echo "Tests completed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Tests failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install linters
+        run: |
+          pip install ruff black
+      
+      - name: Check formatting with Black
+        run: |
+          black --check app/ tests/
+        continue-on-error: true
+      
+      - name: Lint with Ruff
+        run: |
+          ruff check app/ tests/
+        continue-on-error: true
