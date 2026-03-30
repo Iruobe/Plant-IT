@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import plants, ai, care_plans,usage 
+from app.api.v1 import plants, ai, care_plans, usage
 
 api_router = APIRouter()
 

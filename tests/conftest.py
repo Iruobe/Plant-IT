@@ -34,6 +34,7 @@ os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
 # DATABASE FIXTURES
 # ============================================================
 
+
 @pytest.fixture(scope="function")
 def aws_credentials():
     """Mock AWS credentials for moto."""
@@ -48,18 +49,18 @@ def aws_credentials():
 def mock_dynamodb(aws_credentials):
     """
     Create mocked DynamoDB tables for testing.
-    
+
     Creates all 4 tables used by the app:
     - Plants table
     - Care plans table
     - Task completions table
     - Rate limits table
-    
+
     Each table is empty at the start of each test.
     """
     with mock_aws():
         dynamodb = boto3.resource("dynamodb", region_name="eu-west-2")
-        
+
         # Plants table
         dynamodb.create_table(
             TableName="plant-it-plants-test",
@@ -73,7 +74,7 @@ def mock_dynamodb(aws_credentials):
             ],
             BillingMode="PAY_PER_REQUEST",
         )
-        
+
         # Care plans table
         dynamodb.create_table(
             TableName="plant-it-care-plans-test",
@@ -87,7 +88,7 @@ def mock_dynamodb(aws_credentials):
             ],
             BillingMode="PAY_PER_REQUEST",
         )
-        
+
         # Task completions table
         dynamodb.create_table(
             TableName="plant-it-task-completions-test",
@@ -101,7 +102,7 @@ def mock_dynamodb(aws_credentials):
             ],
             BillingMode="PAY_PER_REQUEST",
         )
-        
+
         # Rate limits table
         dynamodb.create_table(
             TableName="plant-it-rate-limits-test",
@@ -115,7 +116,7 @@ def mock_dynamodb(aws_credentials):
             ],
             BillingMode="PAY_PER_REQUEST",
         )
-        
+
         yield dynamodb
 
 
@@ -123,7 +124,7 @@ def mock_dynamodb(aws_credentials):
 def mock_s3(aws_credentials):
     """
     Create mocked S3 bucket for testing.
-    
+
     Creates the images bucket with proper configuration.
     """
     with mock_aws():
@@ -139,11 +140,12 @@ def mock_s3(aws_credentials):
 # AUTHENTICATION FIXTURES
 # ============================================================
 
+
 @pytest.fixture
 def mock_firebase_user():
     """
     Returns a mock decoded Firebase token.
-    
+
     Simulates a verified user from Firebase Auth.
     """
     return {
@@ -169,7 +171,7 @@ def mock_firebase_user_2():
 def auth_headers():
     """
     Returns authorization headers with a mock token.
-    
+
     The token itself doesn't matter since we mock Firebase verification.
     """
     return {"Authorization": "Bearer mock_firebase_token_12345"}
@@ -179,7 +181,7 @@ def auth_headers():
 def mock_auth(mock_firebase_user):
     """
     Mock Firebase authentication.
-    
+
     Patches the get_current_user dependency to return our test user
     without actually calling Firebase.
     """
@@ -192,11 +194,12 @@ def mock_auth(mock_firebase_user):
 # FASTAPI TEST CLIENT
 # ============================================================
 
+
 @pytest.fixture
 def client(mock_dynamodb, mock_s3, mock_auth):
     """
     FastAPI test client with all mocks configured.
-    
+
     This client:
     - Uses mocked DynamoDB tables
     - Uses mocked S3 bucket
@@ -206,14 +209,14 @@ def client(mock_dynamodb, mock_s3, mock_auth):
     # Reset cached DynamoDB connections
     from app.repositories import dynamodb as db_module
     from app.core import rate_limit as rl_module
-    
+
     db_module._dynamodb = None
     db_module._plants_table = None
     rl_module._dynamodb = None
     rl_module._rate_limits_table = None
-    
+
     from app.main import app
-    
+
     with TestClient(app) as test_client:
         yield test_client
 
@@ -222,7 +225,7 @@ def client(mock_dynamodb, mock_s3, mock_auth):
 def authenticated_client(client, auth_headers):
     """
     Test client with authentication headers pre-configured.
-    
+
     Usage:
         def test_something(authenticated_client):
             response = authenticated_client.get("/api/v1/plants/")
@@ -235,11 +238,12 @@ def authenticated_client(client, auth_headers):
 # SAMPLE DATA FIXTURES
 # ============================================================
 
+
 @pytest.fixture
 def sample_plant_data():
     """
     Returns valid plant creation data.
-    
+
     Use this to create plants in tests.
     """
     return {
@@ -288,11 +292,12 @@ def sample_care_task():
 # MOCK AI SERVICES
 # ============================================================
 
+
 @pytest.fixture
 def mock_bedrock():
     """
     Mock AWS Bedrock AI service.
-    
+
     Returns predefined responses for:
     - Plant scanning (health analysis)
     - Care plan generation
@@ -301,18 +306,23 @@ def mock_bedrock():
     mock_response = {
         "content": [
             {
-                "text": json.dumps({
-                    "plant_type": "Monstera deliciosa",
-                    "health_score": 85,
-                    "health_status": "healthy",
-                    "issues": ["Minor dust on leaves"],
-                    "recommendations": ["Wipe leaves monthly", "Rotate for even growth"],
-                    "summary": "Your plant is healthy with minor care needs.",
-                })
+                "text": json.dumps(
+                    {
+                        "plant_type": "Monstera deliciosa",
+                        "health_score": 85,
+                        "health_status": "healthy",
+                        "issues": ["Minor dust on leaves"],
+                        "recommendations": [
+                            "Wipe leaves monthly",
+                            "Rotate for even growth",
+                        ],
+                        "summary": "Your plant is healthy with minor care needs.",
+                    }
+                )
             }
         ]
     }
-    
+
     with patch("app.services.bedrock.get_bedrock_client") as mock_client:
         mock_invoke = MagicMock()
         mock_body = MagicMock()
@@ -343,9 +353,9 @@ def mock_bedrock_care_plan():
             "priority": "medium",
         },
     ]
-    
+
     mock_response = {"content": [{"text": json.dumps(care_tasks)}]}
-    
+
     with patch("app.services.bedrock.get_bedrock_client") as mock_client:
         mock_invoke = MagicMock()
         mock_body = MagicMock()
@@ -359,22 +369,24 @@ def mock_bedrock_care_plan():
 # HELPER FUNCTIONS
 # ============================================================
 
+
 @pytest.fixture
 def create_test_plant(authenticated_client, sample_plant_data):
     """
     Factory fixture to create plants in tests.
-    
+
     Usage:
         def test_something(create_test_plant):
             plant = create_test_plant()
             # plant is now in the database
     """
+
     def _create_plant(data=None):
         plant_data = data or sample_plant_data
         response = authenticated_client.post("/api/v1/plants/", json=plant_data)
         assert response.status_code == 201
         return response.json()
-    
+
     return _create_plant
 
 
@@ -382,13 +394,14 @@ def create_test_plant(authenticated_client, sample_plant_data):
 def create_test_care_task(mock_dynamodb, mock_firebase_user):
     """
     Factory fixture to create care tasks directly in DynamoDB.
-    
+
     Bypasses API for faster test setup.
     """
+
     def _create_task(plant_id=None, **overrides):
         task_id = f"task_{uuid4().hex[:8]}"
         plant_id = plant_id or str(uuid4())
-        
+
         task = {
             "user_id": mock_firebase_user["uid"],
             "task_id": task_id,
@@ -404,11 +417,11 @@ def create_test_care_task(mock_dynamodb, mock_firebase_user):
             "created_at": datetime.utcnow().isoformat(),
             **overrides,
         }
-        
+
         table = mock_dynamodb.Table("plant-it-care-plans-test")
         table.put_item(Item=task)
         return task
-    
+
     return _create_task
 
 
@@ -416,21 +429,22 @@ def create_test_care_task(mock_dynamodb, mock_firebase_user):
 # PERFORMANCE TEST FIXTURES
 # ============================================================
 
+
 @pytest.fixture
 def response_time_threshold():
     """
     Maximum acceptable response times in milliseconds.
-    
+
     Based on 50 concurrent users target.
     """
     return {
-        "health_check": 100,      # Simple endpoint
-        "list_plants": 300,       # Database read
-        "create_plant": 500,      # Database write
-        "get_plant": 200,         # Single item read
-        "delete_plant": 400,      # Database delete
-        "scan_plant": 5000,       # AI operation (Bedrock)
-        "chat": 3000,             # AI operation
-        "today_tasks": 400,       # Database query
-        "complete_task": 300,     # Database update
+        "health_check": 100,  # Simple endpoint
+        "list_plants": 300,  # Database read
+        "create_plant": 500,  # Database write
+        "get_plant": 200,  # Single item read
+        "delete_plant": 400,  # Database delete
+        "scan_plant": 5000,  # AI operation (Bedrock)
+        "chat": 3000,  # AI operation
+        "today_tasks": 400,  # Database query
+        "complete_task": 300,  # Database update
     }

@@ -20,16 +20,16 @@ import random
 class PlantITUser(HttpUser):
     """
     Simulates a Plant IT user's behavior.
-    
+
     Each user:
     - Has their own auth token (mocked)
     - Creates plants, views them, manages tasks
     - Occasionally uses AI features
     """
-    
+
     # Wait 1-3 seconds between tasks (realistic user behavior)
     wait_time = between(1, 3)
-    
+
     def on_start(self):
         """
         Called when a user starts.
@@ -39,15 +39,15 @@ class PlantITUser(HttpUser):
         # For load testing, use a test token or mock auth
         self.headers = {
             "Authorization": "Bearer test_load_test_token",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         self.plant_ids = []
         self.task_ids = []
-    
+
     # ============================================================
     # HIGH FREQUENCY TASKS (60% of traffic)
     # ============================================================
-    
+
     @task(10)
     @tag("read", "plants")
     def list_plants(self):
@@ -56,9 +56,7 @@ class PlantITUser(HttpUser):
         Most common operation - users check their plants frequently.
         """
         with self.client.get(
-            "/api/v1/plants/",
-            headers=self.headers,
-            catch_response=True
+            "/api/v1/plants/", headers=self.headers, catch_response=True
         ) as response:
             if response.status_code == 200:
                 plants = response.json()
@@ -69,7 +67,7 @@ class PlantITUser(HttpUser):
                 response.failure("Auth failed")
             else:
                 response.failure(f"Unexpected status: {response.status_code}")
-    
+
     @task(8)
     @tag("read", "care-plans")
     def get_today_tasks(self):
@@ -78,9 +76,7 @@ class PlantITUser(HttpUser):
         Second most common - users check tasks daily.
         """
         with self.client.get(
-            "/api/v1/care-plans/today",
-            headers=self.headers,
-            catch_response=True
+            "/api/v1/care-plans/today", headers=self.headers, catch_response=True
         ) as response:
             if response.status_code == 200:
                 tasks = response.json()
@@ -88,7 +84,7 @@ class PlantITUser(HttpUser):
                 response.success()
             else:
                 response.failure(f"Status: {response.status_code}")
-    
+
     @task(5)
     @tag("read", "plants")
     def get_single_plant(self):
@@ -97,12 +93,10 @@ class PlantITUser(HttpUser):
         """
         if not self.plant_ids:
             return
-        
+
         plant_id = random.choice(self.plant_ids)
         with self.client.get(
-            f"/api/v1/plants/{plant_id}",
-            headers=self.headers,
-            catch_response=True
+            f"/api/v1/plants/{plant_id}", headers=self.headers, catch_response=True
         ) as response:
             if response.status_code == 200:
                 response.success()
@@ -112,11 +106,11 @@ class PlantITUser(HttpUser):
                 response.success()
             else:
                 response.failure(f"Status: {response.status_code}")
-    
+
     # ============================================================
     # MEDIUM FREQUENCY TASKS (30% of traffic)
     # ============================================================
-    
+
     @task(3)
     @tag("write", "care-plans")
     def complete_task(self):
@@ -126,18 +120,18 @@ class PlantITUser(HttpUser):
         """
         if not self.task_ids:
             return
-        
+
         task_id = random.choice(self.task_ids)
         with self.client.post(
             f"/api/v1/care-plans/complete/{task_id}",
             headers=self.headers,
-            catch_response=True
+            catch_response=True,
         ) as response:
             if response.status_code in [200, 404]:
                 response.success()
             else:
                 response.failure(f"Status: {response.status_code}")
-    
+
     @task(2)
     @tag("write", "plants")
     def create_plant(self):
@@ -149,14 +143,14 @@ class PlantITUser(HttpUser):
             "name": f"Load Test Plant {random.randint(1, 10000)}",
             "species": "Test Species",
             "goal": random.choice(["decorative", "food", "medicinal"]),
-            "location": "Test Location"
+            "location": "Test Location",
         }
-        
+
         with self.client.post(
             "/api/v1/plants/",
             headers=self.headers,
             json=plant_data,
-            catch_response=True
+            catch_response=True,
         ) as response:
             if response.status_code == 201:
                 plant = response.json()
@@ -164,7 +158,7 @@ class PlantITUser(HttpUser):
                 response.success()
             else:
                 response.failure(f"Status: {response.status_code}")
-    
+
     @task(1)
     @tag("read", "usage")
     def check_usage(self):
@@ -173,19 +167,17 @@ class PlantITUser(HttpUser):
         Occasional check by users.
         """
         with self.client.get(
-            "/api/v1/usage/",
-            headers=self.headers,
-            catch_response=True
+            "/api/v1/usage/", headers=self.headers, catch_response=True
         ) as response:
             if response.status_code == 200:
                 response.success()
             else:
                 response.failure(f"Status: {response.status_code}")
-    
+
     # ============================================================
     # LOW FREQUENCY TASKS (10% of traffic - AI operations)
     # ============================================================
-    
+
     @task(1)
     @tag("ai", "expensive")
     def chat_with_assistant(self):
@@ -199,15 +191,15 @@ class PlantITUser(HttpUser):
             "When should I repot my plant?",
             "How often should I water succulents?",
         ]
-        
+
         with self.client.post(
             "/api/v1/ai/chat",
             headers=self.headers,
             json={
                 "message": random.choice(messages),
-                "session_id": f"load_test_{self.environment.runner.user_count}"
+                "session_id": f"load_test_{self.environment.runner.user_count}",
             },
-            catch_response=True
+            catch_response=True,
         ) as response:
             if response.status_code == 200:
                 response.success()
@@ -216,11 +208,11 @@ class PlantITUser(HttpUser):
                 response.success()
             else:
                 response.failure(f"Status: {response.status_code}")
-    
+
     # ============================================================
     # CLEANUP
     # ============================================================
-    
+
     @task(1)
     @tag("write", "plants", "cleanup")
     def delete_plant(self):
@@ -231,9 +223,7 @@ class PlantITUser(HttpUser):
         if len(self.plant_ids) > 5:  # Keep some plants
             plant_id = self.plant_ids.pop()
             with self.client.delete(
-                f"/api/v1/plants/{plant_id}",
-                headers=self.headers,
-                catch_response=True
+                f"/api/v1/plants/{plant_id}", headers=self.headers, catch_response=True
             ) as response:
                 if response.status_code in [200, 404]:
                     response.success()
@@ -246,10 +236,10 @@ class HealthCheckUser(HttpUser):
     Simple user that only checks health endpoint.
     Used to establish baseline performance.
     """
-    
+
     wait_time = between(0.5, 1)
     weight = 1  # Lower weight = fewer of these users
-    
+
     @task
     def health_check(self):
         """Check API health endpoint."""

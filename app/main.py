@@ -6,12 +6,14 @@ from app.api.v1.router import api_router
 from contextlib import asynccontextmanager
 from app.repositories.dynamodb import create_tables
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: create tables
     create_tables()
     yield
     # Shutdown: nothing to clean up
+
 
 app = FastAPI(
     title="Plant IT API",
@@ -37,5 +39,5 @@ async def health_check():
     return {
         "status": "healthy",
         "version": "1.0.0",
-        "environment": settings.ENVIRONMENT
+        "environment": settings.ENVIRONMENT,
     }

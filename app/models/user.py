@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 
+
 class UserPreferences(BaseModel):
     user_id: str = "default"  # Single user for now
     latitude: Optional[float] = None
