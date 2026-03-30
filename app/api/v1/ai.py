@@ -6,7 +6,6 @@ from datetime import datetime
 import json
 
 from app.repositories.dynamodb import get_plants_table
-from app.repositories.s3 import generate_download_url
 from app.services.bedrock import analyze_plant_image, get_bedrock_client
 from app.services.recommendations import get_plant_recommendations
 from app.services.chat import chat_with_assistant, clear_chat_session

@@ -11,7 +11,6 @@ Tests cover:
 
 import pytest
 from unittest.mock import patch, MagicMock
-from datetime import datetime, timedelta
 from fastapi import HTTPException
 
 from app.core.rate_limit import (

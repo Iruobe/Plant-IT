@@ -13,7 +13,6 @@ Test scenarios:
 """
 
 from locust import HttpUser, task, between, tag
-import json
 import random
 
 

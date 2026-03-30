@@ -85,7 +85,7 @@ Respond in this exact JSON format:
         start = text_response.find("{")
         end = text_response.rfind("}") + 1
         analysis = json.loads(text_response[start:end])
-    except:
+    except Exception:
         analysis = {
             "plant_type": "Unknown",
             "health_score": 50,

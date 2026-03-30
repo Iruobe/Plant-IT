@@ -12,7 +12,7 @@ import pytest
 import boto3
 import json
 import os
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from moto import mock_aws
 from fastapi.testclient import TestClient
 from datetime import datetime

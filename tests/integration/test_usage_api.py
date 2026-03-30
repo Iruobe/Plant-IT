@@ -8,8 +8,6 @@ Endpoints tested:
 - GET /api/v1/usage/{endpoint_key} (specific endpoint usage)
 """
 
-import pytest
-
 
 class TestGetUsage:
     """Tests for GET /api/v1/usage/"""

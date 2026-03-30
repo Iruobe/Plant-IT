@@ -11,7 +11,7 @@ Thresholds based on:
 
 import pytest
 import time
-from statistics import mean, stdev
+from statistics import mean
 
 
 class TestResponseTimes:

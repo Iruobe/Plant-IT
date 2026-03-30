@@ -13,7 +13,6 @@ Endpoints tested:
 - POST /api/v1/plants/{id}/confirm-upload (confirm upload)
 """
 
-import pytest
 from uuid import uuid4
 
 

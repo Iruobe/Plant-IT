@@ -1,6 +1,6 @@
 import boto3
 import json
-from typing import List, Optional
+from typing import Optional
 from app.core.config import settings
 
 

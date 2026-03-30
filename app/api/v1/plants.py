@@ -13,7 +13,6 @@ from app.core.validators import (
     validate_species,
     validate_location,
     validate_goal,
-    validate_uuid,
 )
 
 router = APIRouter()

@@ -1,6 +1,5 @@
 import boto3
 from datetime import datetime, date
-from typing import Optional
 from app.core.config import settings
 
 _dynamodb = None

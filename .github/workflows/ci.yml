@@ -1,130 +1,37 @@
-# CI Pipeline - Runs on every push to any branch
+# =============================================================================
+# CI Pipeline for Plant IT Backend
+# =============================================================================
 # 
-# This workflow:
-# 1. Sets up Python environment
-# 2. Installs dependencies
-# 3. Runs all unit and integration tests
-# 4. Generates coverage report
-# 5. Fails if coverage drops below 70%
+# Triggers:
+#   - Every push to any branch
+#   - Every pull request to main
+#
+# Jobs:
+#   1. lint    - Code quality checks (Black formatting, Ruff linting)
+#   2. test    - Unit + Integration tests with coverage threshold
+#
+# Coverage threshold: 70% (enforced after all tests complete)
+# =============================================================================
 
 name: CI
 
 on:
   push:
-    branches: ['*']  # Run on all branches
+    branches: ['*']
   pull_request:
     branches: [main]
 
 env:
   PYTHON_VERSION: '3.11'
-  
-jobs:
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-    
-    steps:
-      # ============================================================
-      # SETUP
-      # ============================================================
-      
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-      
-      # ============================================================
-      # UNIT TESTS
-      # ============================================================
-      
-      - name: Run unit tests
-        run: |
-          pytest tests/unit/ \
-            -v \
-            --tb=short \
-            --cov=app \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage-unit.xml \
-            -m "not slow"
-        env:
-          ENVIRONMENT: test
-          AWS_REGION: eu-west-2
-          DYNAMODB_TABLE_NAME: plant-it-plants-test
-          CARE_PLANS_TABLE_NAME: plant-it-care-plans-test
-          TASK_COMPLETIONS_TABLE_NAME: plant-it-task-completions-test
-          RATE_LIMITS_TABLE_NAME: plant-it-rate-limits-test
-          S3_BUCKET_NAME: plant-it-images-test
-      
-      # ============================================================
-      # INTEGRATION TESTS
-      # ============================================================
-      
-      - name: Run integration tests
-        run: |
-          pytest tests/integration/ \
-            -v \
-            --tb=short \
-            --cov=app \
-            --cov-append \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml \
-            --cov-report=html:coverage_html
-        env:
-          ENVIRONMENT: test
-          AWS_REGION: eu-west-2
-          DYNAMODB_TABLE_NAME: plant-it-plants-test
-          CARE_PLANS_TABLE_NAME: plant-it-care-plans-test
-          TASK_COMPLETIONS_TABLE_NAME: plant-it-task-completions-test
-          RATE_LIMITS_TABLE_NAME: plant-it-rate-limits-test
-          S3_BUCKET_NAME: plant-it-images-test
-      
-      # ============================================================
-      # COVERAGE REPORT
-      # ============================================================
-      
-      - name: Check coverage threshold
-        run: |
-          coverage report --fail-under=70
-      
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage_html/
-          retention-days: 7
-      
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
-        continue-on-error: true
-      
-      # ============================================================
-      # TEST SUMMARY
-      # ============================================================
-      
-      - name: Test Summary
-        if: always()
-        run: |
-          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f coverage.xml ]; then
-            echo "Tests completed successfully" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "Tests failed" >> $GITHUB_STEP_SUMMARY
-          fi
 
+# =============================================================================
+# JOB 1: CODE QUALITY
+# =============================================================================
+# Runs Black (formatter) and Ruff (linter) to ensure code standards.
+# This job runs in parallel with tests for faster feedback.
+# =============================================================================
+
+jobs:
   lint:
     name: Code Quality
     runs-on: ubuntu-latest
@@ -142,12 +49,147 @@ jobs:
         run: |
           pip install ruff black
       
+      # Black: Checks code formatting
+      # Run `black app/ tests/` locally to auto-fix
       - name: Check formatting with Black
-        run: |
-          black --check app/ tests/
-        continue-on-error: true
+        run: black --check app/ tests/
       
+      # Ruff: Fast Python linter (replaces flake8, isort, etc.)
+      # Run `ruff check --fix app/ tests/` locally to auto-fix
       - name: Lint with Ruff
+        run: ruff check app/ tests/
+
+# =============================================================================
+# JOB 2: TESTS
+# =============================================================================
+# Runs unit tests, then integration tests, then checks combined coverage.
+# 
+# Key points:
+#   - Unit tests run first (fast, no external dependencies)
+#   - Integration tests run second with --cov-append to add to coverage
+#   - Coverage threshold (70%) is checked AFTER all tests complete
+#   - Individual test steps use --cov-fail-under=0 to defer the check
+# =============================================================================
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    # Environment variables for all test steps
+    # These configure the app to use test databases/buckets
+    env:
+      ENVIRONMENT: test
+      AWS_REGION: eu-west-2
+      DYNAMODB_TABLE_NAME: plant-it-plants-test
+      CARE_PLANS_TABLE_NAME: plant-it-care-plans-test
+      TASK_COMPLETIONS_TABLE_NAME: plant-it-task-completions-test
+      RATE_LIMITS_TABLE_NAME: plant-it-rate-limits-test
+      S3_BUCKET_NAME: plant-it-images-test
+    
+    steps:
+      # ------------------------------------------------------------------
+      # SETUP: Checkout code and install dependencies
+      # ------------------------------------------------------------------
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'  # Cache pip packages for faster builds
+      
+      - name: Install dependencies
         run: |
-          ruff check app/ tests/
-        continue-on-error: true
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      # ------------------------------------------------------------------
+      # UNIT TESTS: Fast tests with mocked dependencies
+      # ------------------------------------------------------------------
+      # These test individual functions/classes in isolation.
+      # External services (Firebase, AWS, Bedrock) are mocked.
+      # Coverage threshold deferred (--cov-fail-under=0) to final step.
+      # ------------------------------------------------------------------
+      
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ \
+            -v \
+            --tb=short \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-unit.xml \
+            --cov-fail-under=0 \
+            -m "not slow"
+      
+      # ------------------------------------------------------------------
+      # INTEGRATION TESTS: API endpoint tests with mocked AWS
+      # ------------------------------------------------------------------
+      # These test full request/response cycles through FastAPI.
+      # Uses moto to mock DynamoDB/S3, patches Firebase auth.
+      # --cov-append adds to existing coverage from unit tests.
+      # ------------------------------------------------------------------
+      
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ \
+            -v \
+            --tb=short \
+            --cov=app \
+            --cov-append \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:coverage_html \
+            --cov-fail-under=0
+      
+      # ------------------------------------------------------------------
+      # COVERAGE CHECK: Enforce 70% minimum after all tests
+      # ------------------------------------------------------------------
+      # This is where we actually enforce the coverage threshold.
+      # By checking here, we get combined unit + integration coverage.
+      # ------------------------------------------------------------------
+      
+      - name: Check coverage threshold (70% minimum)
+        run: |
+          echo "📊 Combined test coverage report:"
+          coverage report --fail-under=70
+      
+      # ------------------------------------------------------------------
+      # ARTIFACTS: Upload coverage report for inspection
+      # ------------------------------------------------------------------
+      
+      - name: Upload coverage HTML report
+        uses: actions/upload-artifact@v4
+        if: always()  # Upload even if tests fail
+        with:
+          name: coverage-report
+          path: coverage_html/
+          retention-days: 7
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+        continue-on-error: true  # Codecov is optional, don't fail build
+      
+      # ------------------------------------------------------------------
+      # SUMMARY: Add results to GitHub Actions summary page
+      # ------------------------------------------------------------------
+      
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage.xml ]; then
+            echo "All tests passed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Coverage" >> $GITHUB_STEP_SUMMARY
+            coverage report --format=markdown >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "See artifacts for details" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Tests failed: check logs above" >> $GITHUB_STEP_SUMMARY
+          fi

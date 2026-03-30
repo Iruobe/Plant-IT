@@ -126,7 +126,7 @@ Respond in this JSON format:
         start = text_response.find("{")
         end = text_response.rfind("}") + 1
         recommendations = json.loads(text_response[start:end])
-    except:
+    except Exception:
         recommendations = {
             "climate_summary": "Could not determine climate",
             "recommendations": [],
