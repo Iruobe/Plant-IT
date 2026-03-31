@@ -89,7 +89,6 @@ async def create_plant(
     return plant
 
 
-# Updated the list_plants function to generate presigned URLs for images:
 @router.get("/", response_model=List[Plant])
 async def list_plants(current_user: dict = Depends(get_current_user)):
     """List all plants for the authenticated user."""
@@ -101,16 +100,15 @@ async def list_plants(current_user: dict = Depends(get_current_user)):
     )
 
     plants = response.get("Items", [])
-    
+
     # Generate presigned URLs for images
     for plant in plants:
         if plant.get("image_url"):
             plant["image_url"] = generate_download_url(plant["image_url"])
-    
+
     return plants
 
 
-# Updated the get_plant function:
 @router.get("/{plant_id}", response_model=Plant)
 async def get_plant(plant_id: str, current_user: dict = Depends(get_current_user)):
     """Get a specific plant by ID."""
@@ -123,26 +121,12 @@ async def get_plant(plant_id: str, current_user: dict = Depends(get_current_user
         raise HTTPException(status_code=404, detail="Plant not found")
 
     plant = response["Item"]
-    
+
     # Generate presigned URL for image
     if plant.get("image_url"):
         plant["image_url"] = generate_download_url(plant["image_url"])
-    
+
     return plant
-
-
-@router.get("/{plant_id}", response_model=Plant)
-async def get_plant(plant_id: str, current_user: dict = Depends(get_current_user)):
-    """Get a specific plant by ID."""
-    table = get_plants_table()
-    response = table.get_item(
-        Key={"user_id": current_user["uid"], "plant_id": plant_id}
-    )
-
-    if "Item" not in response:
-        raise HTTPException(status_code=404, detail="Plant not found")
-
-    return response["Item"]
 
 
 @router.delete("/{plant_id}")
@@ -151,7 +135,6 @@ async def delete_plant(plant_id: str, current_user: dict = Depends(get_current_u
     user_id = current_user["uid"]
     table = get_plants_table()
 
-    # Check if exists and belongs to user
     response = table.get_item(Key={"user_id": user_id, "plant_id": plant_id})
 
     if "Item" not in response:
@@ -173,11 +156,9 @@ async def get_upload_url(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a presigned URL to upload an image directly to S3."""
-    # Validate filename
     if not filename or len(filename) > 100:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    # Only allow safe file extensions
     allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
     ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext not in allowed_extensions:
@@ -194,7 +175,6 @@ async def get_upload_url(
     if "Item" not in response:
         raise HTTPException(status_code=404, detail="Plant not found")
 
-    # Include user_id in S3 path for organization
     key = f"plants/{current_user['uid']}/{plant_id}/{filename}"
     upload_url = generate_upload_url(key)
 
@@ -206,7 +186,6 @@ async def confirm_upload(
     plant_id: str, key: str = Query(...), current_user: dict = Depends(get_current_user)
 ):
     """Confirm upload and save image URL to plant record."""
-    # Validate key format (should match expected pattern)
     if not key.startswith(f"plants/{current_user['uid']}/{plant_id}/"):
         raise HTTPException(status_code=400, detail="Invalid upload key")
 
