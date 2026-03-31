@@ -1,0 +1,132 @@
+# Nightly Performance Tests
+#
+# This workflow runs daily at midnight UTC and:
+# 1. Runs API performance tests
+# 2. Runs load tests with Locust
+# 3. Generates performance report
+# 4. Alerts if performance degrades
+
+name: Nightly Performance Tests
+
+on:
+  schedule:
+    # Run at midnight UTC every day
+    - cron: '0 0 * * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      users:
+        description: 'Number of simulated users'
+        required: false
+        default: '50'
+      duration:
+        description: 'Test duration in seconds'
+        required: false
+        default: '60'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      # ============================================================
+      # SETUP
+      # ============================================================
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      # ============================================================
+      # API PERFORMANCE TESTS
+      # ============================================================
+      
+      - name: Run API performance tests
+        run: |
+          pytest tests/performance/test_api_performance.py \
+            -v \
+            --tb=short \
+            --benchmark-disable
+        env:
+          ENVIRONMENT: test
+          AWS_REGION: eu-west-2
+          DYNAMODB_TABLE_NAME: plant-it-plants-test
+          CARE_PLANS_TABLE_NAME: plant-it-care-plans-test
+          TASK_COMPLETIONS_TABLE_NAME: plant-it-task-completions-test
+          RATE_LIMITS_TABLE_NAME: plant-it-rate-limits-test
+          S3_BUCKET_NAME: plant-it-images-test
+      
+      # ============================================================
+      # LOAD TESTS (against staging/test environment)
+      # ============================================================
+      
+      - name: Run Locust load tests
+        run: |
+          # Run headless Locust test
+          locust \
+            -f tests/performance/locustfile.py \
+            --headless \
+            --users ${{ github.event.inputs.users || '50' }} \
+            --spawn-rate 10 \
+            --run-time ${{ github.event.inputs.duration || '60' }}s \
+            --host ${{ secrets.STAGING_API_URL || 'http://localhost:8000' }} \
+            --html locust-report.html \
+            --csv locust-results \
+            --only-summary
+        continue-on-error: true
+      
+      # ============================================================
+      # REPORTS
+      # ============================================================
+      
+      - name: Upload Locust report
+        uses: actions/upload-artifact@v4
+        with:
+          name: locust-report
+          path: |
+            locust-report.html
+            locust-results*.csv
+          retention-days: 30
+      
+      - name: Generate performance summary
+        if: always()
+        run: |
+          echo "## Performance Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- Users: ${{ github.event.inputs.users || '50' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Duration: ${{ github.event.inputs.duration || '60' }}s" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f locust-results_stats.csv ]; then
+            echo "### Results" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat locust-results_stats.csv | head -20 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      # ============================================================
+      # ALERTS (optional - notify on failure)
+      # ============================================================
+      
+      - name: Alert on failure
+        if: failure()
+        run: |
+          echo "::warning::Performance tests failed! Check the report for details."
+

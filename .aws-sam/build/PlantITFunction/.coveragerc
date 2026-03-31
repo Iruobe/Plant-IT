@@ -1,0 +1,20 @@
+[run]
+source = app
+omit = 
+    app/lambda_handler.py
+    tests/*
+    */__pycache__/*
+    
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    pass
+
+show_missing = True
+precision = 2
+
+[html]
+directory = coverage_html

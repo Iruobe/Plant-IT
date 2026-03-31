@@ -1,10 +1,12 @@
 import boto3
 import json
-from typing import List, Optional
+from typing import Optional
 from app.core.config import settings
 
+
 def get_bedrock_client():
-    return boto3.client('bedrock-runtime', region_name=settings.AWS_REGION)
+    return boto3.client("bedrock-runtime", region_name=settings.AWS_REGION)
+
 
 # In-memory chat history (replace with DynamoDB later)
 chat_sessions = {}
@@ -31,58 +33,57 @@ Guidelines:
 
 Remember: You're helping people grow things and connect with nature. Be enthusiastic about their plant journey!"""
 
+
 def chat_with_assistant(
-    message: str,
-    session_id: str = "default",
-    plant_context: Optional[dict] = None
+    message: str, session_id: str = "default", plant_context: Optional[dict] = None
 ) -> dict:
     """Chat with the plant care assistant"""
-    
+
     # Get or create session history
     if session_id not in chat_sessions:
         chat_sessions[session_id] = []
-    
+
     history = chat_sessions[session_id]
-    
+
     # Build context if plant info provided
     context = ""
     if plant_context:
         context = f"\n\n[Context: The user has a {plant_context.get('name', 'plant')} ({plant_context.get('species', 'unknown species')}) with health status: {plant_context.get('health_status', 'unknown')}]"
-    
+
     # Add user message to history
     user_message = message + context
     history.append({"role": "user", "content": user_message})
-    
+
     # Keep only last 20 messages to manage context size
     if len(history) > 20:
         history = history[-20:]
         chat_sessions[session_id] = history
-    
+
     client = get_bedrock_client()
-    
+
     response = client.invoke_model(
-        modelId='anthropic.claude-sonnet-4-6',
-        contentType='application/json',
-        accept='application/json',
-        body=json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 1024,
-            "system": SYSTEM_PROMPT,
-            "messages": history
-        })
+        modelId="anthropic.claude-sonnet-4-6",
+        contentType="application/json",
+        accept="application/json",
+        body=json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1024,
+                "system": SYSTEM_PROMPT,
+                "messages": history,
+            }
+        ),
     )
-    
-    result = json.loads(response['body'].read())
-    assistant_message = result['content'][0]['text']
-    
+
+    result = json.loads(response["body"].read())
+    assistant_message = result["content"][0]["text"]
+
     # Add assistant response to history
     history.append({"role": "assistant", "content": assistant_message})
     chat_sessions[session_id] = history
-    
-    return {
-        "response": assistant_message,
-        "session_id": session_id
-    }
+
+    return {"response": assistant_message, "session_id": session_id}
+
 
 def clear_chat_session(session_id: str = "default"):
     """Clear chat history for a session"""

@@ -6,7 +6,6 @@ from datetime import datetime
 import json
 
 from app.repositories.dynamodb import get_plants_table
-from app.repositories.s3 import generate_download_url
 from app.services.bedrock import analyze_plant_image, get_bedrock_client
 from app.services.recommendations import get_plant_recommendations
 from app.services.chat import chat_with_assistant, clear_chat_session
@@ -26,8 +25,8 @@ router = APIRouter()
 # Scan Models
 class ScanRequest(BaseModel):
     plant_id: str
-    
-    @field_validator('plant_id')
+
+    @field_validator("plant_id")
     @classmethod
     def validate_plant_id(cls, v):
         return validate_uuid(v, "Plant ID")
@@ -53,20 +52,20 @@ class RecommendationRequest(BaseModel):
     space_type: Optional[str] = None
     sunlight: Optional[str] = None
     experience_level: str = "beginner"
-    
-    @field_validator('goals')
+
+    @field_validator("goals")
     @classmethod
     def validate_goals(cls, v):
         if len(v) > 10:
             raise ValueError("Maximum 10 goals allowed")
         return [g.strip()[:50] for g in v if g.strip()]  # Limit each goal to 50 chars
-    
-    @field_validator('experience_level')
+
+    @field_validator("experience_level")
     @classmethod
     def validate_experience(cls, v):
-        valid_levels = {'beginner', 'intermediate', 'expert'}
+        valid_levels = {"beginner", "intermediate", "expert"}
         if v.lower() not in valid_levels:
-            return 'beginner'
+            return "beginner"
         return v.lower()
 
 
@@ -75,18 +74,18 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = "default"
     plant_id: Optional[str] = None
-    
-    @field_validator('message')
+
+    @field_validator("message")
     @classmethod
     def validate_message(cls, v):
         return validate_chat_message(v)
-    
-    @field_validator('session_id')
+
+    @field_validator("session_id")
     @classmethod
     def validate_session(cls, v):
         return validate_session_id(v)
-    
-    @field_validator('plant_id')
+
+    @field_validator("plant_id")
     @classmethod
     def validate_plant(cls, v):
         if v is None:
@@ -104,51 +103,43 @@ class ChatResponse(BaseModel):
 async def scan_plant(
     request: ScanRequest,
     current_user: dict = Depends(get_current_user),
-    _rate_limit: dict = Depends(rate_limit("ai_scan"))
+    _rate_limit: dict = Depends(rate_limit("ai_scan")),
 ):
     """Scan a plant image and analyze its health using AI."""
     user_id = current_user["uid"]
     plant_id = request.plant_id
-    
+
     table = get_plants_table()
-    response = table.get_item(
-        Key={
-            "user_id": user_id,
-            "plant_id": plant_id
-        }
-    )
-    
-    if 'Item' not in response:
+    response = table.get_item(Key={"user_id": user_id, "plant_id": plant_id})
+
+    if "Item" not in response:
         raise HTTPException(status_code=404, detail="Plant not found")
-    
-    plant = response['Item']
-    
-    if not plant.get('image_url'):
+
+    plant = response["Item"]
+
+    if not plant.get("image_url"):
         raise HTTPException(status_code=400, detail="No image uploaded for this plant")
-    
-    analysis = analyze_plant_image(plant['image_url'])
-    
+
+    analysis = analyze_plant_image(plant["image_url"])
+
     scan_id = str(uuid4())
     scanned_at = datetime.utcnow().isoformat()
-    
+
     table.update_item(
-        Key={
-            "user_id": user_id,
-            "plant_id": plant_id
-        },
+        Key={"user_id": user_id, "plant_id": plant_id},
         UpdateExpression="SET health_score = :score, health_status = :status, updated_at = :now",
         ExpressionAttributeValues={
-            ":score": analysis['health_score'],
-            ":status": analysis['health_status'],
-            ":now": scanned_at
-        }
+            ":score": analysis["health_score"],
+            ":status": analysis["health_status"],
+            ":now": scanned_at,
+        },
     )
 
     # Auto-generate care plan after scan
     try:
         # Delete existing care plans for this plant
         care_plans_repo.delete_care_plans_for_plant(user_id, plant_id)
-        
+
         # Generate new care plan based on scan results
         care_prompt = f"""Based on this plant scan, generate 3-5 specific care tasks.
 
@@ -168,16 +159,18 @@ Only return the JSON array, nothing else."""
             modelId=settings.BEDROCK_MODEL_ID,
             contentType="application/json",
             accept="application/json",
-            body=json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1024,
-                "messages": [{"role": "user", "content": care_prompt}]
-            })
+            body=json.dumps(
+                {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 1024,
+                    "messages": [{"role": "user", "content": care_prompt}],
+                }
+            ),
         )
-        
-        care_result = json.loads(care_response['body'].read())
-        care_text = care_result['content'][0]['text'].strip()
-        
+
+        care_result = json.loads(care_response["body"].read())
+        care_text = care_result["content"][0]["text"].strip()
+
         # Clean JSON response
         if care_text.startswith("```"):
             care_text = care_text.split("```")[1]
@@ -185,25 +178,27 @@ Only return the JSON array, nothing else."""
                 care_text = care_text[4:]
         if care_text.endswith("```"):
             care_text = care_text[:-3]
-        
+
         tasks_data = json.loads(care_text.strip())
-        
+
         for task_data in tasks_data:
             care_plans_repo.create_care_plan_task(
                 user_id=user_id,
                 task_id=f"task_{uuid4().hex[:8]}",
                 plant_id=plant_id,
-                plant_name=plant.get('name', 'Unknown'),
-                task_type=task_data.get('task_type', 'other'),
-                title=task_data.get('title', ''),
-                description=task_data.get('description', ''),
-                frequency=task_data.get('frequency', 'daily'),
-                times_per_week=task_data.get('times_per_week', 7),
-                priority=task_data.get('priority', 'medium')
+                plant_name=plant.get("name", "Unknown"),
+                task_type=task_data.get("task_type", "other"),
+                title=task_data.get("title", ""),
+                description=task_data.get("description", ""),
+                frequency=task_data.get("frequency", "daily"),
+                times_per_week=task_data.get("times_per_week", 7),
+                priority=task_data.get("priority", "medium"),
             )
-        
-        print(f"Successfully generated {len(tasks_data)} care tasks for plant {plant_id}")
-        
+
+        print(
+            f"Successfully generated {len(tasks_data)} care tasks for plant {plant_id}"
+        )
+
     except Exception as e:
         # Don't fail the scan if care plan generation fails
         print(f"Care plan generation failed: {e}")
@@ -211,13 +206,13 @@ Only return the JSON array, nothing else."""
     return ScanResult(
         scan_id=scan_id,
         plant_id=plant_id,
-        plant_type=analysis.get('plant_type'),
-        health_score=analysis['health_score'],
-        health_status=analysis['health_status'],
-        issues=analysis['issues'],
-        recommendations=analysis['recommendations'],
-        summary=analysis['summary'],
-        scanned_at=scanned_at
+        plant_type=analysis.get("plant_type"),
+        health_score=analysis["health_score"],
+        health_status=analysis["health_status"],
+        issues=analysis["issues"],
+        recommendations=analysis["recommendations"],
+        summary=analysis["summary"],
+        scanned_at=scanned_at,
     )
 
 
@@ -226,7 +221,7 @@ Only return the JSON array, nothing else."""
 async def get_recommendations(
     request: RecommendationRequest,
     current_user: dict = Depends(get_current_user),
-    _rate_limit: dict = Depends(rate_limit("ai_recommendations"))
+    _rate_limit: dict = Depends(rate_limit("ai_recommendations")),
 ):
     """Get personalized plant recommendations based on goals, location, and conditions."""
     recommendations = get_plant_recommendations(
@@ -235,9 +230,9 @@ async def get_recommendations(
         longitude=request.longitude,
         space_type=request.space_type,
         sunlight=request.sunlight,
-        experience_level=request.experience_level
+        experience_level=request.experience_level,
     )
-    
+
     return recommendations
 
 
@@ -246,7 +241,7 @@ async def get_recommendations(
 async def chat(
     request: ChatRequest,
     current_user: dict = Depends(get_current_user),
-    _rate_limit: dict = Depends(rate_limit("ai_chat"))
+    _rate_limit: dict = Depends(rate_limit("ai_chat")),
 ):
     """Chat with the Plant IT assistant about plants and gardening."""
     # Get plant context if plant_id provided
@@ -254,40 +249,29 @@ async def chat(
     if request.plant_id:
         table = get_plants_table()
         response = table.get_item(
-            Key={
-                "user_id": current_user["uid"],
-                "plant_id": request.plant_id
-            }
+            Key={"user_id": current_user["uid"], "plant_id": request.plant_id}
         )
-        if 'Item' in response:
-            plant = response['Item']
+        if "Item" in response:
+            plant = response["Item"]
             plant_context = {
                 "name": plant.get("name"),
                 "species": plant.get("species"),
                 "health_status": plant.get("health_status"),
-                "health_score": plant.get("health_score")
+                "health_score": plant.get("health_score"),
             }
-    
+
     # Prefix session_id with user_id for isolation between users
     user_session_id = f"{current_user['uid']}_{request.session_id}"
-    
+
     result = chat_with_assistant(
-        message=request.message,
-        session_id=user_session_id,
-        plant_context=plant_context
+        message=request.message, session_id=user_session_id, plant_context=plant_context
     )
-    
-    return ChatResponse(
-        response=result["response"],
-        session_id=request.session_id
-    )
+
+    return ChatResponse(response=result["response"], session_id=request.session_id)
 
 
 @router.delete("/chat/{session_id}")
-async def clear_chat(
-    session_id: str,
-    current_user: dict = Depends(get_current_user)
-):
+async def clear_chat(session_id: str, current_user: dict = Depends(get_current_user)):
     """Clear chat history for a session."""
     # Validate session_id
     session_id = validate_session_id(session_id)

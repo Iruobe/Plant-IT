@@ -89,18 +89,46 @@ async def create_plant(
     return plant
 
 
+# Updated the list_plants function to generate presigned URLs for images:
 @router.get("/", response_model=List[Plant])
 async def list_plants(current_user: dict = Depends(get_current_user)):
     """List all plants for the authenticated user."""
     table = get_plants_table()
 
-    # Query only this user's plants (not scan entire table)
     response = table.query(
         KeyConditionExpression="user_id = :uid",
         ExpressionAttributeValues={":uid": current_user["uid"]},
     )
 
-    return response.get("Items", [])
+    plants = response.get("Items", [])
+    
+    # Generate presigned URLs for images
+    for plant in plants:
+        if plant.get("image_url"):
+            plant["image_url"] = generate_download_url(plant["image_url"])
+    
+    return plants
+
+
+# Updated the get_plant function:
+@router.get("/{plant_id}", response_model=Plant)
+async def get_plant(plant_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a specific plant by ID."""
+    table = get_plants_table()
+    response = table.get_item(
+        Key={"user_id": current_user["uid"], "plant_id": plant_id}
+    )
+
+    if "Item" not in response:
+        raise HTTPException(status_code=404, detail="Plant not found")
+
+    plant = response["Item"]
+    
+    # Generate presigned URL for image
+    if plant.get("image_url"):
+        plant["image_url"] = generate_download_url(plant["image_url"])
+    
+    return plant
 
 
 @router.get("/{plant_id}", response_model=Plant)
