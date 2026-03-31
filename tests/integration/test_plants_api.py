@@ -95,9 +95,9 @@ class TestListPlants:
     ):
         """Listing plants returns all plants owned by user."""
         # Create 3 plants
-        plant1 = create_test_plant({"name": "Plant 1", "goal": "decorative"})
-        plant2 = create_test_plant({"name": "Plant 2", "goal": "food"})
-        plant3 = create_test_plant({"name": "Plant 3", "goal": "medicinal"})
+        create_test_plant({"name": "Plant 1", "goal": "decorative"})
+        create_test_plant({"name": "Plant 2", "goal": "food"})
+        create_test_plant({"name": "Plant 3", "goal": "medicinal"})
 
         response = authenticated_client.get("/api/v1/plants/")
 

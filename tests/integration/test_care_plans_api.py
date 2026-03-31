@@ -33,9 +33,9 @@ class TestTodayTasks:
     ):
         """Getting today's tasks returns all active tasks for user."""
         # Create tasks for different plants
-        task1 = create_test_care_task(plant_name="Monstera", task_type="water")
-        task2 = create_test_care_task(plant_name="Fern", task_type="mist")
-        task3 = create_test_care_task(plant_name="Monstera", task_type="rotate")
+        create_test_care_task(plant_name="Monstera", task_type="water")
+        create_test_care_task(plant_name="Fern", task_type="mist")
+        create_test_care_task(plant_name="Monstera", task_type="rotate")
 
         response = authenticated_client.get("/api/v1/care-plans/today")
 
